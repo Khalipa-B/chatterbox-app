@@ -1,5 +1,5 @@
 import { Server } from "socket.io";
-import { storage } from "./storage-mem.js";
+import { storage } from "./storage.js";
 
 export function registerRoutes(app, httpServer) {
   // Initialize Socket.io with the existing HTTP server
@@ -18,22 +18,25 @@ export function registerRoutes(app, httpServer) {
     // Handle user join
     socket.on('join', async (userData) => {
       try {
-        let user = await storage.findUserByUsername(userData.username);
+        let user = await storage.getUserByUsername(userData.username);
         
         if (!user) {
           user = await storage.createUser(userData);
+        } else {
+          // Update user status to online if returning user
+          user = await storage.updateUserStatus(user._id, 'online');
         }
 
         // Add to active users
-        storage.addActiveUser(user.id, socket.id);
-        socket.userId = user.id;
+        storage.addActiveUser(socket.id, user);
+        socket.userId = user._id;
         socket.username = user.username;
 
         // Join the general room
         socket.join('general');
 
         // Send recent messages to the new user
-        const recentMessages = await storage.getMessages('general', 50);
+        const recentMessages = await storage.getMessages(50);
         socket.emit('message_history', recentMessages);
 
         // Send current online users
@@ -61,8 +64,9 @@ export function registerRoutes(app, httpServer) {
       try {
         const message = await storage.createMessage({
           content: messageData.content,
-          sender: socket.username,
-          room: 'general'
+          userId: socket.userId,
+          username: socket.username,
+          type: 'message'
         });
 
         // Broadcast message to all users in the room
@@ -96,18 +100,23 @@ export function registerRoutes(app, httpServer) {
     socket.on('disconnect', async () => {
       try {
         if (socket.userId) {
-          storage.removeActiveUser(socket.userId);
+          const user = storage.removeActiveUser(socket.id);
+          
+          if (user) {
+            // Update user status to offline in database
+            await storage.updateUserStatus(socket.userId, 'offline');
 
-          // Broadcast user left to others
-          socket.to('general').emit('user_left', {
-            username: socket.username,
-            message: `${socket.username} left the chat`
-          });
+            // Broadcast user left to others
+            socket.to('general').emit('user_left', {
+              user: user,
+              message: `${socket.username} left the chat`
+            });
 
-          // Broadcast updated user list
-          io.to('general').emit('online_users', storage.getActiveUsers());
+            // Broadcast updated user list
+            io.to('general').emit('online_users', storage.getActiveUsers());
 
-          console.log(`${socket.username} disconnected`);
+            console.log(`${socket.username} disconnected`);
+          }
         }
       } catch (error) {
         console.error('Error handling disconnect:', error);
@@ -122,7 +131,7 @@ export function registerRoutes(app, httpServer) {
 
   app.get('/api/messages', async (req, res) => {
     try {
-      const messages = await storage.getMessages('general', 50);
+      const messages = await storage.getMessages(50);
       res.json(messages);
     } catch (error) {
       res.status(500).json({ error: 'Failed to fetch messages' });
