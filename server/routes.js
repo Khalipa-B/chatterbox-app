@@ -18,26 +18,26 @@ export async function registerRoutes(app) {
     console.log('User connected:', socket.id);
 
     // Handle user authentication/join
-    socket.on('join', (userData) => {
+    socket.on('join', async (userData) => {
       try {
-        let user = storage.getUserByUsername(userData.username);
+        let user = await storage.getUserByUsername(userData.username);
         
         if (!user) {
-          user = storage.createUser(userData);
+          user = await storage.createUser(userData);
         } else {
-          storage.updateUserStatus(user.id, 'online');
+          user = await storage.updateUserStatus(user._id, 'online');
         }
 
         // Add to active users
         storage.addActiveUser(socket.id, user);
-        socket.userId = user.id;
+        socket.userId = user._id;
         socket.username = user.username;
 
         // Join the general room
         socket.join('general');
 
         // Send recent messages to the new user
-        const recentMessages = storage.getMessages(50);
+        const recentMessages = await storage.getMessages(50);
         socket.emit('message_history', recentMessages);
 
         // Send current online users
@@ -61,7 +61,7 @@ export async function registerRoutes(app) {
     });
 
     // Handle new messages
-    socket.on('send_message', (messageData) => {
+    socket.on('send_message', async (messageData) => {
       try {
         const user = storage.getUserBySocketId(socket.id);
         if (!user) {
@@ -69,9 +69,9 @@ export async function registerRoutes(app) {
           return;
         }
 
-        const message = storage.createMessage({
+        const message = await storage.createMessage({
           content: messageData.content,
-          userId: user.id,
+          userId: user._id,
           username: user.username,
           type: 'message'
         });
@@ -90,9 +90,9 @@ export async function registerRoutes(app) {
     socket.on('typing', () => {
       const user = storage.getUserBySocketId(socket.id);
       if (user) {
-        storage.addTypingUser(user.id);
+        storage.addTypingUser(user._id);
         socket.to('general').emit('user_typing', {
-          userId: user.id,
+          userId: user._id,
           username: user.username
         });
       }
@@ -101,34 +101,34 @@ export async function registerRoutes(app) {
     socket.on('stop_typing', () => {
       const user = storage.getUserBySocketId(socket.id);
       if (user) {
-        storage.removeTypingUser(user.id);
+        storage.removeTypingUser(user._id);
         socket.to('general').emit('user_stop_typing', {
-          userId: user.id,
+          userId: user._id,
           username: user.username
         });
       }
     });
 
     // Handle user status updates
-    socket.on('update_status', (status) => {
+    socket.on('update_status', async (status) => {
       const user = storage.getUserBySocketId(socket.id);
       if (user) {
-        storage.updateUserStatus(user.id, status);
-        const updatedUser = storage.getUserById(user.id);
+        await storage.updateUserStatus(user._id, status);
+        const updatedUser = await storage.getUserById(user._id);
         io.to('general').emit('user_status_update', updatedUser);
         io.to('general').emit('online_users', storage.getActiveUsers());
       }
     });
 
     // Handle disconnection
-    socket.on('disconnect', () => {
+    socket.on('disconnect', async () => {
       try {
         const user = storage.removeActiveUser(socket.id);
         
         if (user) {
           // Update user status to offline
-          storage.updateUserStatus(user.id, 'offline');
-          storage.removeTypingUser(user.id);
+          await storage.updateUserStatus(user._id, 'offline');
+          storage.removeTypingUser(user._id);
 
           // Broadcast user left to others
           socket.to('general').emit('user_left', {

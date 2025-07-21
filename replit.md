@@ -27,10 +27,10 @@ Preferred communication style: Simple, everyday language.
 - **Build Process**: ESBuild for server bundling
 
 ### Data Storage Solutions
-- **Primary Database**: PostgreSQL with Neon serverless hosting
-- **ORM**: Drizzle ORM for type-safe database operations
-- **Schema Management**: Drizzle Kit for migrations and schema management
-- **In-Memory Storage**: Fallback memory storage for development/testing
+- **Primary Database**: MongoDB Atlas with Mongoose ODM
+- **Connection**: MongoDB Atlas cluster (chatterbox database)
+- **Models**: User and Message schemas with proper indexing
+- **Hybrid Storage**: Database persistence with in-memory active user tracking
 
 ### Authentication and Authorization
 - **Session-based Authentication**: Express sessions stored in PostgreSQL

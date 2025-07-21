@@ -1,6 +1,6 @@
 import express from "express";
 import { registerRoutes } from "./routes.js";
-import { setupVite, serveStatic, log } from "./vite.js";
+import { setupVite, serveStatic, log } from "./vite.ts";
 
 const app = express();
 app.use(express.json());
