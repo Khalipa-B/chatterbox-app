@@ -15,7 +15,7 @@ export function registerRoutes(app, httpServer) {
   io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
-    // Handle user authentication/join
+    // Handle user join
     socket.on('join', async (userData) => {
       try {
         let user = await storage.findUserByUsername(userData.username);
@@ -59,22 +59,16 @@ export function registerRoutes(app, httpServer) {
     // Handle new messages
     socket.on('send_message', async (messageData) => {
       try {
-        const user = storage.getUserBySocketId(socket.id);
-        if (!user) {
-          socket.emit('error', { message: 'User not found' });
-          return;
-        }
-
         const message = await storage.createMessage({
           content: messageData.content,
           sender: socket.username,
-          type: 'message'
+          room: 'general'
         });
 
         // Broadcast message to all users in the room
         io.to('general').emit('new_message', message);
 
-        console.log(`Message from ${user.username}: ${message.content}`);
+        console.log(`Message from ${socket.username}: ${message.content}`);
       } catch (error) {
         console.error('Error handling message:', error);
         socket.emit('error', { message: 'Failed to send message' });
@@ -83,58 +77,37 @@ export function registerRoutes(app, httpServer) {
 
     // Handle typing indicators
     socket.on('typing', () => {
-      const user = storage.getUserBySocketId(socket.id);
-      if (user) {
-        storage.addTypingUser(user._id);
+      if (socket.username) {
         socket.to('general').emit('user_typing', {
-          userId: user._id,
-          username: user.username
+          username: socket.username
         });
       }
     });
 
     socket.on('stop_typing', () => {
-      const user = storage.getUserBySocketId(socket.id);
-      if (user) {
-        storage.removeTypingUser(user._id);
+      if (socket.username) {
         socket.to('general').emit('user_stop_typing', {
-          userId: user._id,
-          username: user.username
+          username: socket.username
         });
-      }
-    });
-
-    // Handle user status updates
-    socket.on('update_status', async (status) => {
-      const user = storage.getUserBySocketId(socket.id);
-      if (user) {
-        await storage.updateUserStatus(user._id, status);
-        const updatedUser = await storage.getUserById(user._id);
-        io.to('general').emit('user_status_update', updatedUser);
-        io.to('general').emit('online_users', storage.getActiveUsers());
       }
     });
 
     // Handle disconnection
     socket.on('disconnect', async () => {
       try {
-        const user = storage.removeActiveUser(socket.id);
-        
-        if (user) {
-          // Update user status to offline
-          await storage.updateUserStatus(user._id, 'offline');
-          storage.removeTypingUser(user._id);
+        if (socket.userId) {
+          storage.removeActiveUser(socket.userId);
 
           // Broadcast user left to others
           socket.to('general').emit('user_left', {
-            user: user,
-            message: `${user.username} left the chat`
+            username: socket.username,
+            message: `${socket.username} left the chat`
           });
 
           // Broadcast updated user list
           io.to('general').emit('online_users', storage.getActiveUsers());
 
-          console.log(`${user.username} disconnected`);
+          console.log(`${socket.username} disconnected`);
         }
       } catch (error) {
         console.error('Error handling disconnect:', error);
@@ -143,23 +116,27 @@ export function registerRoutes(app, httpServer) {
   });
 
   // REST API endpoints for basic operations
-  app.get('/api/messages', (req, res) => {
+  app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', message: 'Chat server is running' });
+  });
+
+  app.get('/api/messages', async (req, res) => {
     try {
-      const messages = storage.getMessages(50);
+      const messages = await storage.getMessages('general', 50);
       res.json(messages);
     } catch (error) {
       res.status(500).json({ error: 'Failed to fetch messages' });
     }
   });
 
-  app.get('/api/users', (req, res) => {
+  app.get('/api/users/online', (req, res) => {
     try {
-      const users = storage.getAllUsers();
-      res.json(users);
+      const onlineUsers = storage.getActiveUsers();
+      res.json(onlineUsers);
     } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch users' });
+      res.status(500).json({ error: 'Failed to fetch online users' });
     }
   });
 
-  return httpServer;
+  return io;
 }
