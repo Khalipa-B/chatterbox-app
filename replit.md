@@ -2,7 +2,16 @@
 
 ## Overview
 
-This is a modern real-time chat application built with React, Express, Socket.io, and PostgreSQL. The application demonstrates bidirectional communication between clients and server, implementing features like live messaging, notifications, and online status tracking.
+This is a modern real-time chat application built with React, Express, Socket.io, and MongoDB. The application demonstrates bidirectional communication between clients and server, implementing features like live messaging, user presence, persistent message storage, and real-time notifications.
+
+## Recent Changes (January 21, 2025)
+
+✓ Successfully resolved Socket.io connection issues and established bidirectional communication
+✓ Converted server architecture from TypeScript to JavaScript as requested  
+✓ Integrated MongoDB Atlas database with proper IP whitelist configuration
+✓ Implemented persistent message and user storage with real-time synchronization
+✓ Fixed server startup issues and static file serving configuration
+✓ Chat application now fully functional with database persistence
 
 ## User Preferences
 
